@@ -1,1 +1,1 @@
-# iot-anomaly-detection
+# iot-anomaly-detector
