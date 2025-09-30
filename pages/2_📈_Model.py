@@ -1,20 +1,36 @@
 import streamlit as st
-import pandas as pd
-from sklearn.ensemble import IsolationForest
-import matplotlib.pyplot as plt
+from utils import load_iop_data
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+import numpy as np
 
-st.title("📈 Anomaly Detection Model")
+st.set_page_config(page_title="Model", page_icon="📈")
 
-df = pd.read_csv("data/iop_data.csv")
+df = load_iop_data()
+st.subheader("LSTM Forecasting Example")
 
-# Train model
-model = IsolationForest(contamination=0.1, random_state=42)
-df["Anomaly"] = model.fit_predict(df[["IOP"]])
+# Scale
+scaler = MinMaxScaler()
+scaled = scaler.fit_transform(df[["iop_left", "iop_right"]])
 
-# Plot
-fig, ax = plt.subplots()
-ax.plot(df["timestamp"], df["IOP"], label="IOP")
-ax.scatter(df["timestamp"], df["IOP"], c=df["Anomaly"].map({1:"blue", -1:"red"}), label="Anomalies")
-plt.xticks(rotation=45)
-ax.legend()
-st.pyplot(fig)
+# Simple LSTM dataset creation
+def create_sequences(data, seq_length=5):
+    xs, ys = [], []
+    for i in range(len(data)-seq_length):
+        xs.append(data[i:(i+seq_length)])
+        ys.append(data[i+seq_length])
+    return np.array(xs), np.array(ys)
+
+X, y = create_sequences(scaled)
+st.write(f"Sample sequence X shape: {X.shape}, y shape: {y.shape}")
+
+# LSTM model
+model = Sequential()
+model.add(LSTM(50, activation='relu', input_shape=(X.shape[1], X.shape[2])))
+model.add(Dense(y.shape[1]))
+model.compile(optimizer='adam', loss='mse')
+
+st.write("Training model...")
+model.fit(X, y, epochs=3, batch_size=16, verbose=0)
+st.success("Model trained (demo run)")

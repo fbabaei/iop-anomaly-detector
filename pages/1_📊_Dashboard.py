@@ -1,23 +1,20 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import plotly.express as px
+from utils import load_iop_data
 
-st.title("📊 IOP Monitoring Dashboard")
+st.set_page_config(page_title="Dashboard", page_icon="📊")
 
-# Load sample data
-df = pd.read_csv("data/iop_data.csv")
+df = load_iop_data()
 
 # KPIs
-avg_iop = round(df["IOP"].mean(), 2)
-max_iop = round(df["IOP"].max(), 2)
-alerts = (df["IOP"] > 22).sum()
-
+st.subheader("Key Metrics")
 col1, col2, col3 = st.columns(3)
-col1.metric("Average IOP", avg_iop)
-col2.metric("Max IOP", max_iop, delta="+3")
-col3.metric("Alerts (>22 mmHg)", alerts)
+col1.metric("Patients", df["patient_id"].nunique())
+col2.metric("Avg IOP Left", round(df["iop_left"].mean(), 2))
+col3.metric("Avg IOP Right", round(df["iop_right"].mean(), 2))
 
-# Time-series chart
-fig = px.line(df, x="timestamp", y="IOP", title="IOP Time Series", markers=True)
+# Line chart
+st.subheader("IOP Time Series")
+fig = px.line(df, x="timestamp", y=["iop_left", "iop_right"], markers=True,
+              labels={"value":"IOP", "timestamp":"Time"}, title="IOP over Time")
 st.plotly_chart(fig, use_container_width=True)

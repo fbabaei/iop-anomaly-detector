@@ -1,10 +1,10 @@
 import streamlit as st
-import pandas as pd
+from utils import load_iop_data
 
-st.title("📑 Reports & Export")
+st.set_page_config(page_title="Reports", page_icon="📑")
+st.subheader("Patient IOP Data")
 
-df = pd.read_csv("data/iop_data.csv")
-st.write(df.head())
-
-csv = df.to_csv(index=False).encode("utf-8")
-st.download_button("📥 Download Report (CSV)", csv, "iop_report.csv", "text/csv")
+df = load_iop_data()
+st.dataframe(df.head(50))
+st.write("Summary statistics:")
+st.write(df.describe())
