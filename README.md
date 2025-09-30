@@ -1,23 +1,14 @@
 ---
-title: IOP Anomaly Detection Dashboard
+title: Storage Usage Forecaster
 emoji: 📊
-colorFrom: blue
-colorTo: green
+colorFrom: indigo
+colorTo: blue
 sdk: streamlit
-sdk_version: "1.39.0"
+sdk_version: "1.38.0"
 app_file: app.py
 pinned: false
 ---
 
-# 📊 IOP Anomaly Detection Dashboard
+# Storage Usage Forecaster
 
-This Streamlit app demonstrates anomaly detection for IOP (Input/Output Processing) metrics.
-It includes:
-- ✅ KPI overview cards
-- 📈 Time-series anomaly detection
-- 📊 Interactive dashboards
-
-## 🚀 Run locally
-```bash
-pip install -r requirements.txt
-streamlit run app.py
+A Streamlit dashboard for anomaly detection and forecasting of storage usage with KPIs and interactive charts.
