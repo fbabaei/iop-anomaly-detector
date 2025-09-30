@@ -19,5 +19,5 @@ col2.metric("Max IOP", max_iop, delta="+3")
 col3.metric("Alerts (>22 mmHg)", alerts)
 
 # Time-series chart
-fig = px.line(df, x="Date", y="IOP", title="IOP Time Series", markers=True)
+fig = px.line(df, x="timestamp", y="IOP", title="IOP Time Series", markers=True)
 st.plotly_chart(fig, use_container_width=True)
