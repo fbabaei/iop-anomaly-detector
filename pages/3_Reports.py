@@ -1,65 +1,104 @@
-import os
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+import os
 import matplotlib.pyplot as plt
-
-from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import load_model
+import joblib
+
+st.set_page_config(page_title="📑 Reports", layout="wide")
 
 DATA_FILE = "data/iop_data.csv"
 MODEL_FILE = "lstm_model.h5"
+SCALER_FILE = "scaler.pkl"
 LOOK_BACK = 10
 
-# -------------------------
-# Helpers
-# -------------------------
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        st.error(f"Data file not found at {DATA_FILE}")
-        st.stop()
-    return pd.read_csv(DATA_FILE)
+# ------------------------------
+# Load or generate dataset
+# ------------------------------
+def load_dataset():
+    if os.path.exists(DATA_FILE):
+        st.success(f"Loaded dataset: {DATA_FILE}")
+        df = pd.read_csv(DATA_FILE)
+    else:
+        st.warning(f"⚠️ {DATA_FILE} not found. Using synthetic dataset instead.")
+        np.random.seed(42)
+        time = pd.date_range("2023-01-01", periods=500, freq="H")
+        sensor_values = np.sin(np.linspace(0, 50, 500)) + np.random.normal(0, 0.3, 500)
+        df = pd.DataFrame({"timestamp": time, "IOP": sensor_values})
+    return df
 
-def create_dataset(series, look_back=1):
-    X, Y = [], []
+# ------------------------------
+# Prepare input for prediction
+# ------------------------------
+def prepare_input(series, look_back=LOOK_BACK):
+    X = []
     for i in range(len(series) - look_back):
-        X.append(series[i:(i + look_back), 0])
-        Y.append(series[i + look_back, 0])
-    return np.array(X), np.array(Y)
+        X.append(series[i:i+look_back])
+    return np.array(X)
 
-# -------------------------
-# Streamlit App
-# -------------------------
-st.title("📑 IOP Model Reports")
+# ------------------------------
+# Load model and scaler
+# ------------------------------
+def load_model_and_scaler():
+    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE):
+        model = load_model(MODEL_FILE, compile=False)
+        scaler = joblib.load(SCALER_FILE)
+        return model, scaler
+    else:
+        st.warning("⚠️ Trained model not found. Reports will only show raw stats.")
+        return None, None
 
-if not os.path.exists(MODEL_FILE):
-    st.error("No trained model found. Please train it first in the Model page.")
-    st.stop()
+# ------------------------------
+# Streamlit UI
+# ------------------------------
+st.title("📑 Reports & Analysis")
 
-df = load_data()
-values = df["IOP"].values.reshape(-1, 1)
+df = load_dataset()
+st.subheader("📊 Raw Data Sample")
+st.dataframe(df.head())
 
-scaler = MinMaxScaler(feature_range=(0, 1))
-scaled = scaler.fit_transform(values)
+# ------------------------------
+# Basic statistics
+# ------------------------------
+st.subheader("📈 Statistics")
+st.write(df["IOP"].describe())
 
-X, y = create_dataset(scaled, LOOK_BACK)
-X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-
-model = load_model(MODEL_FILE, compile=False)  # FIX
-
-predictions = model.predict(X)
-pred_inv = scaler.inverse_transform(predictions)
-y_inv = scaler.inverse_transform(y.reshape(-1, 1))
-
-# -------------------------
-# Plot results
-# -------------------------
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(df.index[LOOK_BACK:], y_inv, label="Actual IOP", color="blue")
-ax.plot(df.index[LOOK_BACK:], pred_inv, label="Predicted IOP", color="red")
-ax.set_title("IOP Forecast vs Actual")
-ax.set_xlabel("Time Index")
+fig, ax = plt.subplots()
+ax.plot(df["timestamp"], df["IOP"], label="IOP values")
+ax.set_xlabel("Time")
 ax.set_ylabel("IOP")
 ax.legend()
-
 st.pyplot(fig)
+
+# ------------------------------
+# Predictions (if model exists)
+# ------------------------------
+model, scaler = load_model_and_scaler()
+
+if model and scaler:
+    st.subheader("🤖 Model Predictions")
+
+    values = df["IOP"].values.reshape(-1, 1)
+    scaled = scaler.transform(values)
+
+    X = prepare_input(scaled)
+    X = X.reshape((X.shape[0], X.shape[1], 1))
+
+    predictions = model.predict(X)
+    predictions = scaler.inverse_transform(predictions)
+
+    # Align timestamps
+    pred_time = df["timestamp"].iloc[LOOK_BACK:].reset_index(drop=True)
+
+    fig, ax = plt.subplots()
+    ax.plot(df["timestamp"], df["IOP"], label="Actual IOP")
+    ax.plot(pred_time, predictions, label="Predicted IOP", linestyle="--")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("IOP")
+    ax.legend()
+    st.pyplot(fig)
+
+    st.success("✅ Predictions plotted successfully!")
+else:
+    st.info("ℹ️ Train a model in the 📈 Model page to unlock predictions here.")

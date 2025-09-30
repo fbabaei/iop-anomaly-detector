@@ -1,76 +1,90 @@
-import os
-import numpy as np
-import pandas as pd
 import streamlit as st
-
+import pandas as pd
+import numpy as np
+import os
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense
-from tensorflow.keras.losses import MeanSquaredError
+import joblib
+
+st.set_page_config(page_title="📈 LSTM Model Training", layout="wide")
 
 DATA_FILE = "data/iop_data.csv"
 MODEL_FILE = "lstm_model.h5"
+SCALER_FILE = "scaler.pkl"
 LOOK_BACK = 10
 
-# -------------------------
-# Helpers
-# -------------------------
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        st.error(f"Data file not found at {DATA_FILE}")
-        st.stop()
-    df = pd.read_csv(DATA_FILE)
+# ------------------------------
+# Load or generate dataset
+# ------------------------------
+def load_dataset():
+    if os.path.exists(DATA_FILE):
+        st.success(f"Loaded dataset: {DATA_FILE}")
+        df = pd.read_csv(DATA_FILE)
+    else:
+        st.warning(f"⚠️ {DATA_FILE} not found. Using synthetic dataset instead.")
+        np.random.seed(42)
+        time = pd.date_range("2023-01-01", periods=500, freq="H")
+        sensor_values = np.sin(np.linspace(0, 50, 500)) + np.random.normal(0, 0.3, 500)
+        df = pd.DataFrame({"timestamp": time, "IOP": sensor_values})
     return df
 
-def create_dataset(series, look_back=1):
-    X, Y = [], []
+# ------------------------------
+# Prepare LSTM data
+# ------------------------------
+def create_dataset(series, look_back=LOOK_BACK):
+    X, y = [], []
     for i in range(len(series) - look_back):
-        X.append(series[i:(i + look_back), 0])
-        Y.append(series[i + look_back, 0])
-    return np.array(X), np.array(Y)
+        X.append(series[i:i+look_back])
+        y.append(series[i+look_back])
+    return np.array(X), np.array(y)
 
-def build_model(input_shape):
-    model = Sequential()
-    model.add(LSTM(50, return_sequences=True, input_shape=input_shape))
-    model.add(LSTM(50))
-    model.add(Dense(1))
-    model.compile(optimizer="adam", loss=MeanSquaredError())
-    return model
-
+# ------------------------------
+# Train and save model
+# ------------------------------
 def train_and_save():
-    df = load_data()
+    df = load_dataset()
     values = df["IOP"].values.reshape(-1, 1)
 
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled = scaler.fit_transform(values)
 
-    X, y = create_dataset(scaled, LOOK_BACK)
-    X = np.reshape(X, (X.shape[0], X.shape[1], 1))
+    X, y = create_dataset(scaled)
+    X = X.reshape((X.shape[0], X.shape[1], 1))
 
-    model = build_model((LOOK_BACK, 1))
-    model.fit(X, y, epochs=5, batch_size=16, verbose=1)
+    model = Sequential([
+        LSTM(50, return_sequences=False, input_shape=(LOOK_BACK, 1)),
+        Dense(1)
+    ])
+    model.compile(optimizer="adam", loss="mse")
+    model.fit(X, y, epochs=10, batch_size=16, verbose=1)
 
     model.save(MODEL_FILE)
-    return model, scaler
+    joblib.dump(scaler, SCALER_FILE)
 
+    st.success("✅ Model trained and saved successfully!")
+
+# ------------------------------
+# Load existing model
+# ------------------------------
 def load_existing_model():
-    if not os.path.exists(MODEL_FILE):
+    if os.path.exists(MODEL_FILE):
+        model = load_model(MODEL_FILE, compile=False)  # avoid 'mse' error
+        scaler = joblib.load(SCALER_FILE)
+        return model, scaler
+    else:
+        st.error("❌ No trained model found. Please train first.")
         return None, None
-    model = load_model(MODEL_FILE, compile=False)  # FIX: avoid "mse" issue
-    df = load_data()
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaler.fit(df["IOP"].values.reshape(-1, 1))
-    return model, scaler
 
-# -------------------------
-# Streamlit App
-# -------------------------
-st.title("📈 IOP Forecasting Model")
+# ------------------------------
+# Streamlit UI
+# ------------------------------
+st.title("📈 LSTM Model Training")
 
-model, scaler = load_existing_model()
-if model is None:
-    st.warning("No trained model found. Training a new one...")
-    model, scaler = train_and_save()
-    st.success("Model trained and saved!")
+if st.button("Train New Model"):
+    train_and_save()
 
-st.success("Model is ready for predictions.")
+if st.button("Load Existing Model"):
+    model, scaler = load_existing_model()
+    if model:
+        st.success("✅ Model loaded successfully!")
