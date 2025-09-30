@@ -1,36 +1,42 @@
+# 2_📈_Model.py
 import streamlit as st
-from utils import load_iop_data
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+import pandas as pd
 import numpy as np
+from model_utils import generate_iop_data, create_lstm_model, forecast_future
 
-st.set_page_config(page_title="Model", page_icon="📈")
+st.title("📈 IOP Forecasting Model")
 
-df = load_iop_data()
-st.subheader("LSTM Forecasting Example")
+# Generate synthetic data
+df = generate_iop_data(num_patients=10, days=30)
 
-# Scale
-scaler = MinMaxScaler()
-scaled = scaler.fit_transform(df[["iop_left", "iop_right"]])
+# Select patient
+patient = st.selectbox("Select Patient", df["patient_id"].unique())
+patient_df = df[df["patient_id"] == patient].sort_values("timestamp")
 
-# Simple LSTM dataset creation
-def create_sequences(data, seq_length=5):
-    xs, ys = [], []
-    for i in range(len(data)-seq_length):
-        xs.append(data[i:(i+seq_length)])
-        ys.append(data[i+seq_length])
-    return np.array(xs), np.array(ys)
+# Show recent IOP data
+st.subheader(f"Recent IOP readings for {patient}")
+st.line_chart(patient_df.set_index("timestamp")["IOP"])
 
-X, y = create_sequences(scaled)
-st.write(f"Sample sequence X shape: {X.shape}, y shape: {y.shape}")
+# Prepare data for LSTM (simple example using mean IOP)
+iop_values = patient_df["IOP"].values.reshape(-1,1)
+input_seq_len = 5  # last 5 days to predict next
+X, y = [], []
 
-# LSTM model
-model = Sequential()
-model.add(LSTM(50, activation='relu', input_shape=(X.shape[1], X.shape[2])))
-model.add(Dense(y.shape[1]))
-model.compile(optimizer='adam', loss='mse')
+for i in range(len(iop_values)-input_seq_len):
+    X.append(iop_values[i:i+input_seq_len])
+    y.append(iop_values[i+input_seq_len])
 
-st.write("Training model...")
-model.fit(X, y, epochs=3, batch_size=16, verbose=0)
-st.success("Model trained (demo run)")
+X, y = np.array(X), np.array(y)
+
+# Train a simple LSTM
+model = create_lstm_model((input_seq_len, 1))
+model.fit(X, y, epochs=10, batch_size=1, verbose=0)
+
+# Forecast next 7 days
+forecast = forecast_future(model, X[-1], steps=7)
+st.subheader("Forecasted IOP for next 7 days")
+forecast_df = pd.DataFrame({
+    "timestamp": pd.date_range(start=patient_df["timestamp"].max() + pd.Timedelta(days=1), periods=7),
+    "IOP Forecast": forecast
+})
+st.line_chart(forecast_df.set_index("timestamp")["IOP Forecast"])
