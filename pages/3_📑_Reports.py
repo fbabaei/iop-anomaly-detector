@@ -1,27 +1,37 @@
-# 3_📑_Reports.py
-import streamlit as st
-import pandas as pd
-from model_utils import generate_iop_data
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
+import joblib
 
-st.title("📑 IOP Reports")
+# -----------------------------
+# Load model & data
+# -----------------------------
+model = load_model("lstm_model.h5")
+scaler = joblib.load("scaler.pkl")
+data = np.load("test_data.npz")
+X_test, y_test = data["X_test"], data["y_test"]
 
-# Generate synthetic data
-df = generate_iop_data(num_patients=10, days=30)
+# -----------------------------
+# Predict
+# -----------------------------
+y_pred = model.predict(X_test)
 
-# Patient-wise summary
-patient_summary = df.groupby("patient_id")["IOP"].agg(["mean", "min", "max", "std"]).reset_index()
-st.subheader("Patient Summary Statistics")
-st.dataframe(patient_summary)
+# Inverse transform back to original scale
+y_test_inv = scaler.inverse_transform(y_test)
+y_pred_inv = scaler.inverse_transform(y_pred)
 
-# Highlight patients with high variability
-high_variability = patient_summary[patient_summary["std"] > 3]
-st.subheader("Patients with High IOP Variability")
-st.dataframe(high_variability)
+# Flatten for plotting
+y_test_inv = y_test_inv.reshape(-1)
+y_pred_inv = y_pred_inv.reshape(-1)
 
-# Export report button
-st.download_button(
-    label="Download Full Report as CSV",
-    data=df.to_csv(index=False),
-    file_name="iop_report.csv",
-    mime="text/csv"
-)
+# -----------------------------
+# Plot
+# -----------------------------
+plt.figure(figsize=(12, 6))
+plt.plot(y_test_inv, label="Actual IOP")
+plt.plot(y_pred_inv, label="Predicted IOP")
+plt.legend()
+plt.title("LSTM Forecast vs Actual IOP")
+plt.xlabel("Time")
+plt.ylabel("IOP")
+plt.show()
