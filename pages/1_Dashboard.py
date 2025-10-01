@@ -5,7 +5,7 @@ import os
 
 st.set_page_config(page_title="📊 IoT Anomaly Dashboard", layout="wide")
 
-DATA_FILE = "data/iop_data.csv"
+DATA_FILE = os.path.join("data", "iop_data.csv")
 
 # Try loading dataset
 if os.path.exists(DATA_FILE):
@@ -15,9 +15,9 @@ else:
     st.warning(f"⚠️ {DATA_FILE} not found. Using synthetic dataset instead.")
     # Create synthetic fallback dataset
     np.random.seed(42)
-    time = pd.date_range("2023-01-01", periods=500, freq="H")
-    sensor_values = np.sin(np.linspace(0, 50, 500)) + np.random.normal(0, 0.3, 500)
-    df = pd.DataFrame({"timestamp": time, "sensor": sensor_values})
+    timestamps = pd.date_range("2023-01-01", periods=500, freq="H")
+    iop_values = np.sin(np.linspace(0, 50, 500)) + np.random.normal(0, 0.3, 500)
+    df = pd.DataFrame({"timestamp": timestamps, "IOP": iop_values})
 
 # Show preview
 st.subheader("📈 Dataset Preview")
